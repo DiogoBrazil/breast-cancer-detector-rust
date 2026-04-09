@@ -5,6 +5,7 @@ use std::path::Path;
 use burn::data::dataset::Dataset;
 
 use breast_cancer_detector_rust::data::{dataset::MammogramDataset, image_ops};
+use breast_cancer_detector_rust::inference::detect;
 use breast_cancer_detector_rust::inference::draw::save_preprocessed_sample_with_boxes;
 use breast_cancer_detector_rust::training::{TrainConfig, run_train_loop};
 use breast_cancer_detector_rust::utils::print_header;
@@ -20,6 +21,18 @@ struct Cli {
 enum Commands {
     Inspect,
     Train,
+    Detect {
+        #[arg(short, long)]
+        image: String,
+        #[arg(short, long, default_value = "outputs/detection_result.png")]
+        output: String,
+        #[arg(short, long, default_value = "outputs/model_best")]
+        model: String,
+        #[arg(long, default_value_t = 0.4)]
+        confidence: f32,
+        #[arg(long, default_value_t = 0.4)]
+        nms_threshold: f32,
+    },
 }
 
 fn main() -> Result<()> {
@@ -67,7 +80,7 @@ fn main() -> Result<()> {
                 println!("Resized W: {}", proc.resized_width);
                 println!("Resized H: {}", proc.resized_height);
 
-                // 🔥 NOVO: salvar imagem com bounding boxes
+                // salvar imagem com bounding boxes
                 let output_path = Path::new("outputs/inspect_first_sample.png");
 
                 save_preprocessed_sample_with_boxes(
@@ -86,6 +99,33 @@ fn main() -> Result<()> {
         Commands::Train => {
             print_header("TRAIN PIPELINE");
             run_train_loop(&config)?;
+        }
+
+        Commands::Detect {
+            image,
+            output,
+            model,
+            confidence,
+            nms_threshold,
+        } => {
+            print_header("DETECT");
+            let detections = detect::run_detection(
+                Path::new(&image),
+                Path::new(&model),
+                Path::new(&output),
+                config.image_size,
+                config.num_classes,
+                confidence,
+                nms_threshold,
+            )?;
+            println!("Found {} detection(s)", detections.len());
+            for (i, det) in detections.iter().enumerate() {
+                println!(
+                    "  #{}: [{:.0}, {:.0}, {:.0}, {:.0}] conf={:.3}",
+                    i, det.x_min, det.y_min, det.x_max, det.y_max, det.confidence
+                );
+            }
+            println!("Output saved to: {}", output);
         }
     }
 
