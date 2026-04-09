@@ -9,16 +9,35 @@ pub struct LossOutput<B: Backend> {
     pub reg_loss: Tensor<B, 1>,
 }
 
-/// BCE with logits: -[y * log(σ(x)) + (1-y) * log(1-σ(x))]
-/// Numericamente estável usando: max(x,0) - x*y + log(1 + exp(-|x|))
-fn bce_with_logits<B: Backend>(logits: Tensor<B, 4>, targets: Tensor<B, 4>) -> Tensor<B, 1> {
+/// Focal Loss with logits (RetinaNet, α=0.25, γ=2.0).
+/// Reduz o peso dos negativos fáceis, crucial para grids com poucos positivos.
+/// Numericamente estável via log-sigmoid.
+fn focal_loss_with_logits<B: Backend>(logits: Tensor<B, 4>, targets: Tensor<B, 4>) -> Tensor<B, 1> {
+    let alpha = 0.25f32;
+    let gamma = 2.0f32;
+
+    // p = sigmoid(logits), calculado de forma estável
+    let p = burn::tensor::activation::sigmoid(logits.clone());
+
+    // log(p) estável = logits - relu(logits) - log(1 + exp(-|logits|))
+    // log(1-p) estável = -relu(logits) - log(1 + exp(-|logits|))
     let abs_logits = logits.clone().abs();
-    let relu_logits = logits.clone().clamp_min(0.0);
+    let log_stable = (abs_logits.neg().exp() + 1.0).log(); // log(1 + exp(-|x|))
+    let log_p = logits.clone() - logits.clone().clamp_min(0.0) - log_stable.clone();
+    let log_1_minus_p = logits.clamp_min(0.0).neg() - log_stable;
 
-    // relu(x) - x*y + log(1 + exp(-|x|))
-    let loss = relu_logits - logits * targets + (abs_logits.neg().exp() + 1.0).log();
+    let num_pos = targets.clone().sum().clamp_min(1.0);
 
-    loss.mean()
+    // Focal weight e loss por elemento
+    let p_t = targets.clone() * p.clone() + (targets.clone().neg() + 1.0) * (p.clone().neg() + 1.0);
+    let focal_weight = (p_t.neg() + 1.0).powf_scalar(gamma);
+    let alpha_t = targets.clone() * alpha + (targets.clone().neg() + 1.0) * (1.0 - alpha);
+
+    let ce = targets.clone().neg() * log_p + (targets.neg() + 1.0).neg() * log_1_minus_p;
+
+    let loss = alpha_t * focal_weight * ce;
+
+    loss.sum() / num_pos
 }
 
 /// Smooth L1 loss aplicada apenas nas posições positivas (onde há objeto).
@@ -56,7 +75,7 @@ pub fn detection_loss<B: Backend>(
     targets: &GridTargets<B>,
     reg_weight: f32,
 ) -> LossOutput<B> {
-    let cls_loss = bce_with_logits(output.cls_logits.clone(), targets.cls_target.clone());
+    let cls_loss = focal_loss_with_logits(output.cls_logits.clone(), targets.cls_target.clone());
 
     let reg_loss = smooth_l1_masked(
         output.reg_pred.clone(),
