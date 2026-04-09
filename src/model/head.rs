@@ -56,7 +56,7 @@ impl<B: Backend> DetectionHead<B> {
     pub fn forward(&self, features: Tensor<B, 4>) -> DetectionOutput<B> {
         DetectionOutput {
             cls_logits: self.cls_branch.forward(features.clone()),
-            reg_pred: self.reg_branch.forward(features),
+            reg_pred: self.reg_branch.forward(features).exp(),
         }
     }
 }
