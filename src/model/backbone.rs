@@ -4,6 +4,9 @@ use burn::nn::pool::{MaxPool2d, MaxPool2dConfig};
 use burn::nn::{BatchNorm, BatchNormConfig, PaddingConfig2d};
 use burn::tensor::{Tensor, backend::Backend};
 
+/// Stride total do backbone (número de pools de 2x2 = 4 → 2^4 = 16).
+pub const BACKBONE_STRIDE: usize = 16;
+
 /// Conv2d + BatchNorm + ReLU
 #[derive(Module, Debug)]
 pub struct ConvBlock<B: Backend> {
@@ -28,16 +31,16 @@ impl<B: Backend> ConvBlock<B> {
     }
 }
 
-/// 5 blocos convolucionais com MaxPool2d(2x2) entre cada.
+/// 5 blocos convolucionais. MaxPool2d(2x2) após os 4 primeiros blocos.
 /// Input:  [B, 3, 416, 416]
-/// Output: [B, 256, 13, 13]  (downsampling 32x)
+/// Output: [B, 256, 26, 26]  (downsampling 16x, stride = BACKBONE_STRIDE)
 #[derive(Module, Debug)]
 pub struct Backbone<B: Backend> {
     block1: ConvBlock<B>, // 3   -> 32,  /2 -> 208
     block2: ConvBlock<B>, // 32  -> 64,  /2 -> 104
     block3: ConvBlock<B>, // 64  -> 128, /2 -> 52
     block4: ConvBlock<B>, // 128 -> 256, /2 -> 26
-    block5: ConvBlock<B>, // 256 -> 256, /2 -> 13
+    block5: ConvBlock<B>, // 256 -> 256, 26x26 (sem pool)
     pool: MaxPool2d,
 }
 
@@ -58,7 +61,7 @@ impl<B: Backend> Backbone<B> {
         let x = self.pool.forward(self.block2.forward(x));
         let x = self.pool.forward(self.block3.forward(x));
         let x = self.pool.forward(self.block4.forward(x));
-        self.pool.forward(self.block5.forward(x))
+        self.block5.forward(x)
     }
 
     pub fn out_channels(&self) -> usize {
