@@ -1,8 +1,26 @@
 use anyhow::Result;
 use burn::tensor::{Tensor, backend::Backend};
+use image::GrayImage;
 
+use super::annotation::BoundingBox;
 use super::dataset::MammogramSample;
-use super::image_ops::{load_grayscale_image, preprocess_image_and_boxes};
+use super::image_ops::{augment, load_grayscale_image, preprocess_image_and_boxes};
+
+/// Amostra carregada do disco sem preprocessing (para augmentation on-the-fly).
+#[derive(Clone)]
+pub struct RawSample {
+    pub gray_image: GrayImage,
+    pub boxes: Vec<BoundingBox>,
+}
+
+/// Carrega imagem e boxes do disco sem aplicar resize/padding.
+pub fn load_raw_sample(sample: &MammogramSample) -> Result<RawSample> {
+    let gray_image = load_grayscale_image(&sample.image_path)?;
+    Ok(RawSample {
+        gray_image,
+        boxes: sample.boxes.clone(),
+    })
+}
 
 #[derive(Debug, Clone)]
 pub struct PreparedSample {
@@ -10,6 +28,33 @@ pub struct PreparedSample {
     pub boxes: Vec<[f32; 4]>,
     pub labels: Vec<usize>,
     pub image_size: usize,
+}
+
+/// Prepara um RawSample aplicando resize/padding para o tamanho alvo (sem augmentation).
+pub fn prepare_from_raw(raw: &RawSample, image_size: usize) -> Result<PreparedSample> {
+    let processed = preprocess_image_and_boxes(&raw.gray_image, &raw.boxes, image_size)?;
+    Ok(PreparedSample {
+        image_chw: processed.image_chw,
+        boxes: processed.boxes,
+        labels: processed.labels,
+        image_size: processed.image_size,
+    })
+}
+
+/// Aplica augmentation e depois preprocess.
+pub fn prepare_from_raw_augmented(
+    raw: &RawSample,
+    image_size: usize,
+    rng: &mut impl rand::Rng,
+) -> Result<PreparedSample> {
+    let (aug_image, aug_boxes) = augment(&raw.gray_image, &raw.boxes, rng);
+    let processed = preprocess_image_and_boxes(&aug_image, &aug_boxes, image_size)?;
+    Ok(PreparedSample {
+        image_chw: processed.image_chw,
+        boxes: processed.boxes,
+        labels: processed.labels,
+        image_size: processed.image_size,
+    })
 }
 
 pub fn prepare_sample(sample: &MammogramSample, image_size: usize) -> Result<PreparedSample> {
