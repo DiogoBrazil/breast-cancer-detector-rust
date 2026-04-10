@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+/// Área mínima (px²) para considerar um box válido. Boxes menores são artefatos de anotação.
+pub const MIN_BOX_AREA: f32 = 100.0;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BoundingBox {
     pub x_min: f32,
@@ -18,8 +21,12 @@ impl BoundingBox {
         (self.y_max - self.y_min).max(0.0)
     }
 
+    pub fn area(&self) -> f32 {
+        self.width() * self.height()
+    }
+
     pub fn is_valid(&self) -> bool {
-        self.x_max > self.x_min && self.y_max > self.y_min
+        self.x_max > self.x_min && self.y_max > self.y_min && self.area() >= MIN_BOX_AREA
     }
 
     pub fn clamp(&mut self, max_w: f32, max_h: f32) {
