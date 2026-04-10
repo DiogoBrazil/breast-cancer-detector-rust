@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use image::{DynamicImage, GrayImage, ImageReader, Luma, imageops::FilterType};
+use rand::Rng;
 
 use super::annotation::BoundingBox;
 
@@ -112,4 +113,43 @@ pub fn preprocess_image_and_boxes(
         pad_y,
         scale,
     })
+}
+
+/// Espelha imagem e bounding boxes horizontalmente.
+pub fn flip_horizontal(image: &GrayImage, boxes: &[BoundingBox]) -> (GrayImage, Vec<BoundingBox>) {
+    let flipped = image::imageops::flip_horizontal(image);
+    let w = image.width() as f32;
+
+    let flipped_boxes = boxes
+        .iter()
+        .map(|b| BoundingBox {
+            x_min: w - b.x_max,
+            y_min: b.y_min,
+            x_max: w - b.x_min,
+            y_max: b.y_max,
+            class_id: b.class_id,
+        })
+        .collect();
+
+    (flipped, flipped_boxes)
+}
+
+/// Aplica augmentações aleatórias a uma imagem e seus boxes.
+/// Retorna a imagem (possivelmente transformada) e boxes correspondentes.
+pub fn augment(
+    image: &GrayImage,
+    boxes: &[BoundingBox],
+    rng: &mut impl Rng,
+) -> (GrayImage, Vec<BoundingBox>) {
+    let mut img = image.clone();
+    let mut bxs = boxes.to_vec();
+
+    // Horizontal flip: 50% de probabilidade
+    if rng.gen_bool(0.5) {
+        let (fi, fb) = flip_horizontal(&img, &bxs);
+        img = fi;
+        bxs = fb;
+    }
+
+    (img, bxs)
 }
