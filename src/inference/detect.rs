@@ -7,8 +7,8 @@ use burn::tensor::Tensor;
 use burn_wgpu::{Wgpu, WgpuDevice};
 
 use crate::data::image_ops::{load_grayscale_image, preprocess_image_and_boxes};
-use crate::model::SimpleDetector;
-use crate::model::backbone::BACKBONE_STRIDE;
+use crate::model::Detector;
+use crate::model::resnet::BACKBONE_STRIDE;
 
 use super::draw::save_image_with_detections;
 
@@ -41,7 +41,7 @@ pub fn run_detection(
         .reshape([1, 3, image_size, image_size]);
 
     // 3. Load model
-    let model = SimpleDetector::<Wgpu>::new(&device, num_classes);
+    let model = Detector::<Wgpu>::new(&device, num_classes);
     let recorder = NamedMpkFileRecorder::<FullPrecisionSettings>::default();
     let record = recorder
         .load(model_path.into(), &device)
