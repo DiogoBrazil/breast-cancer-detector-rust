@@ -2,5 +2,6 @@
 CBIS-DDSM.v1-cbis-ddsm.coco
 convert_coco_to_internal.py
 outputs
+outputs-sem-transferencia
 context7-docs.md
 ARCHITECTURE.md
