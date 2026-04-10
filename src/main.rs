@@ -20,7 +20,20 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Inspect,
-    Train,
+    Train {
+        /// "auto" para download automático, caminho para .pth, ou omitir para treinar do zero.
+        #[arg(long)]
+        pretrained_weights: Option<String>,
+        /// Número de epochs com backbone congelado (só treina a head).
+        #[arg(long, default_value_t = 5)]
+        freeze_epochs: usize,
+        /// Fator de LR para o backbone durante fine-tuning (backbone_lr = base_lr × factor).
+        #[arg(long, default_value_t = 0.1)]
+        backbone_lr_factor: f64,
+        /// Desabilitar data augmentation durante treino.
+        #[arg(long, default_value_t = false)]
+        no_augment: bool,
+    },
     Detect {
         #[arg(short, long)]
         image: String,
@@ -96,8 +109,20 @@ fn main() -> Result<()> {
             }
         }
 
-        Commands::Train => {
+        Commands::Train {
+            pretrained_weights,
+            freeze_epochs,
+            backbone_lr_factor,
+            no_augment,
+        } => {
             print_header("TRAIN PIPELINE");
+            let mut config = config;
+            if let Some(w) = pretrained_weights {
+                config.pretrained_weights = Some(w);
+            }
+            config.freeze_backbone_epochs = freeze_epochs;
+            config.backbone_lr_factor = backbone_lr_factor;
+            config.augment = !no_augment;
             run_train_loop(&config)?;
         }
 
