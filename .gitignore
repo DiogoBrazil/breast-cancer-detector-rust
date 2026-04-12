@@ -1,6 +1,8 @@
 /target
 CBIS-DDSM.v1-cbis-ddsm.coco
 convert_coco_to_internal.py
+convert_new_images.py
+convert_voc_to_json.py
 outputs
 outputs-sem-transferencia
 context7-docs.md
@@ -9,3 +11,5 @@ ARCHITECTURE.md
 new-images
 breast-cancer-detection.v1i.voc
 outputs-10-04-2026
+faster_rcnn_model.pth
+fastrcnn_training.ipynb
