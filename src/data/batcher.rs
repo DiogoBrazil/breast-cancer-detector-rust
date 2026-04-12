@@ -5,6 +5,7 @@ use image::GrayImage;
 use super::annotation::BoundingBox;
 use super::dataset::MammogramSample;
 use super::image_ops::{augment, load_grayscale_image, preprocess_image_and_boxes};
+use crate::training::config::AugmentConfig;
 
 /// Amostra carregada do disco sem preprocessing (para augmentation on-the-fly).
 #[derive(Clone)]
@@ -46,8 +47,9 @@ pub fn prepare_from_raw_augmented(
     raw: &RawSample,
     image_size: usize,
     rng: &mut impl rand::Rng,
+    augment_config: &AugmentConfig,
 ) -> Result<PreparedSample> {
-    let (aug_image, aug_boxes) = augment(&raw.gray_image, &raw.boxes, rng);
+    let (aug_image, aug_boxes) = augment(&raw.gray_image, &raw.boxes, rng, augment_config);
     let processed = preprocess_image_and_boxes(&aug_image, &aug_boxes, image_size)?;
     Ok(PreparedSample {
         image_chw: processed.image_chw,

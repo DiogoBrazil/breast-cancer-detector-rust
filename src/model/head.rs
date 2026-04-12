@@ -1,32 +1,55 @@
 use burn::module::Module;
 use burn::nn::conv::{Conv2d, Conv2dConfig};
-use burn::nn::{BatchNorm, BatchNormConfig, PaddingConfig2d};
+use burn::nn::{BatchNorm, BatchNormConfig, Dropout, DropoutConfig, PaddingConfig2d};
 use burn::tensor::{Tensor, backend::Backend};
 
-/// Conv2d(3x3) + BN + ReLU + Conv2d(1x1) para uma branch de detecção.
+/// Stack de N camadas Conv3x3+BN+ReLU+Dropout + Conv1x1 final.
 #[derive(Module, Debug)]
 pub struct HeadBranch<B: Backend> {
-    conv1: Conv2d<B>,
-    bn1: BatchNorm<B>,
-    conv2: Conv2d<B>,
+    convs: Vec<Conv2d<B>>,
+    bns: Vec<BatchNorm<B>>,
+    dropouts: Vec<Dropout>,
+    out_conv: Conv2d<B>,
 }
 
 impl<B: Backend> HeadBranch<B> {
-    pub fn new(device: &B::Device, in_ch: usize, hidden_ch: usize, out_ch: usize) -> Self {
-        Self {
-            conv1: Conv2dConfig::new([in_ch, hidden_ch], [3, 3])
-                .with_padding(PaddingConfig2d::Explicit(1, 1))
-                .init(device),
-            bn1: BatchNormConfig::new(hidden_ch).init(device),
-            conv2: Conv2dConfig::new([hidden_ch, out_ch], [1, 1]).init(device),
+    pub fn new(
+        device: &B::Device,
+        in_ch: usize,
+        hidden_ch: usize,
+        out_ch: usize,
+        num_layers: usize,
+        dropout_rate: f64,
+    ) -> Self {
+        let mut convs = Vec::new();
+        let mut bns = Vec::new();
+        let mut dropouts = Vec::new();
+
+        for i in 0..num_layers {
+            let ch_in = if i == 0 { in_ch } else { hidden_ch };
+            convs.push(
+                Conv2dConfig::new([ch_in, hidden_ch], [3, 3])
+                    .with_padding(PaddingConfig2d::Explicit(1, 1))
+                    .init(device),
+            );
+            bns.push(BatchNormConfig::new(hidden_ch).init(device));
+            dropouts.push(DropoutConfig::new(dropout_rate).init());
         }
+
+        let out_conv = Conv2dConfig::new([hidden_ch, out_ch], [1, 1]).init(device);
+
+        Self { convs, bns, dropouts, out_conv }
     }
 
     pub fn forward(&self, x: Tensor<B, 4>) -> Tensor<B, 4> {
-        let x = self.conv1.forward(x);
-        let x = self.bn1.forward(x);
-        let x = burn::tensor::activation::relu(x);
-        self.conv2.forward(x)
+        let mut x = x;
+        for i in 0..self.convs.len() {
+            x = self.convs[i].forward(x);
+            x = self.bns[i].forward(x);
+            x = burn::tensor::activation::relu(x);
+            x = self.dropouts[i].forward(x);
+        }
+        self.out_conv.forward(x)
     }
 }
 
@@ -48,8 +71,8 @@ pub struct DetectionHead<B: Backend> {
 impl<B: Backend> DetectionHead<B> {
     pub fn new(device: &B::Device, in_ch: usize, num_classes: usize) -> Self {
         Self {
-            cls_branch: HeadBranch::new(device, in_ch, 128, num_classes),
-            reg_branch: HeadBranch::new(device, in_ch, 128, 4),
+            cls_branch: HeadBranch::new(device, in_ch, 128, num_classes, 4, 0.1),
+            reg_branch: HeadBranch::new(device, in_ch, 128, 4, 4, 0.1),
         }
     }
 

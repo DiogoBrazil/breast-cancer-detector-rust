@@ -26,7 +26,11 @@ fn focal_loss_with_logits<B: Backend>(logits: Tensor<B, 4>, targets: Tensor<B, 4
     let log_p = logits.clone() - logits.clone().clamp_min(0.0) - log_stable.clone();
     let log_1_minus_p = logits.clamp_min(0.0).neg() - log_stable;
 
+    // Calcular num_pos ANTES do label smoothing (contagem exata)
     let num_pos = targets.clone().sum().clamp_min(1.0);
+
+    // Label smoothing: 0 -> 0.01, 1 -> 0.99
+    let targets = targets * 0.98 + 0.01;
 
     // Focal weight e loss por elemento
     let p_t = targets.clone() * p.clone() + (targets.clone().neg() + 1.0) * (p.clone().neg() + 1.0);

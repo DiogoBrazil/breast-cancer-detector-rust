@@ -163,7 +163,7 @@ pub fn run_train_loop(config: &TrainConfig) -> Result<()> {
                 .map(|&idx| {
                     let raw = &train_raw[idx];
                     if config.augment {
-                        prepare_from_raw_augmented(raw, config.image_size, &mut rng)
+                        prepare_from_raw_augmented(raw, config.image_size, &mut rng, &config.augment_config)
                     } else {
                         prepare_from_raw(raw, config.image_size)
                     }
