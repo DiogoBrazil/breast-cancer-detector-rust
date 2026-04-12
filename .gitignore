@@ -5,3 +5,7 @@ outputs
 outputs-sem-transferencia
 context7-docs.md
 ARCHITECTURE.md
+.venv
+new-images
+breast-cancer-detection.v1i.voc
+outputs-10-04-2026
